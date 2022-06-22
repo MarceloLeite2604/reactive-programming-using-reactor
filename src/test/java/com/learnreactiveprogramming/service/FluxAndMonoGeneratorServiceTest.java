@@ -2,9 +2,10 @@ package com.learnreactiveprogramming.service;
 
 import com.learnreactiveprogramming.exception.ReactorException;
 import org.junit.jupiter.api.Test;
-import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
+import reactor.test.scheduler.VirtualTimeScheduler;
 
+import java.time.Duration;
 import java.util.List;
 
 class FluxAndMonoGeneratorServiceTest {
@@ -114,6 +115,23 @@ class FluxAndMonoGeneratorServiceTest {
     final var namesFlux = fluxAndMonoGeneratorService.namesFluxConcatMap(length);
 
     StepVerifier.create(namesFlux)
+      .expectNext("A", "L", "E", "X", "C", "H", "L", "O", "E")
+      .verifyComplete();
+  }
+
+  @Test
+  void namesFluxConcatMapVirtualTimer() {
+
+    // Creates a virtual clock, allowing time to be manipulated on tests.
+    VirtualTimeScheduler.getOrSet();
+
+    final var length = 3;
+    final var namesFlux = fluxAndMonoGeneratorService.namesFluxConcatMap(length);
+
+    // Will execute tests using a virtual clock.
+    StepVerifier.withVirtualTime(() -> namesFlux)
+      // Awaits the specified amount of time. It is a good practice to use a value higher than expected.
+      .thenAwait(Duration.ofSeconds(10))
       .expectNext("A", "L", "E", "X", "C", "H", "L", "O", "E")
       .verifyComplete();
   }

@@ -27,6 +27,9 @@ class MovieReactiveServiceMockTest {
   @Mock
   private ReviewService reviewService;
 
+  @Mock
+  private RevenueService revenueService;
+
   @Test
   void getAllMovies() {
 

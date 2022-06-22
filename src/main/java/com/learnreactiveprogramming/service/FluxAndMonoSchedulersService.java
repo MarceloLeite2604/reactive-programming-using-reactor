@@ -2,6 +2,8 @@ package com.learnreactiveprogramming.service;
 
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.ParallelFlux;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.List;
@@ -37,6 +39,76 @@ public class FluxAndMonoSchedulersService {
 
     final var namesFlux1 = flux1(namesList1)
       .subscribeOn(Schedulers.boundedElastic())
+      .map(value -> {
+        log.info("Value is: " + value);
+        return value;
+      })
+      .log();
+
+    return namesFlux.mergeWith(namesFlux1);
+  }
+
+
+  public ParallelFlux<String> exploreParallel() {
+
+    final var noOrCores = Runtime.getRuntime()
+      .availableProcessors();
+
+    log.info("noOfCores: {}", noOrCores);
+
+    return Flux.fromIterable(namesList)
+      // "parallel" + "runOn" is one approach for parallelism in reactive programming.
+      .parallel()
+      .runOn(Schedulers.parallel())
+//      .publishOn(Schedulers.parallel())
+      .map(this::upperCase)
+      .log();
+  }
+
+  public Flux<String> exploreParallelUsingFlatmap() {
+
+    final var noOrCores = Runtime.getRuntime()
+      .availableProcessors();
+
+    log.info("noOfCores: {}", noOrCores);
+
+    return Flux.fromIterable(namesList)
+      // "flatMap" + "subscribeOn" is another approach for parallelism ins reactive programming.
+      .flatMap(name ->
+        Mono.just(name)
+          .map(this::upperCase)
+          .subscribeOn(Schedulers.parallel()))
+      .log();
+  }
+
+  public Flux<String> exploreParallelUsingFlatmapSequential() {
+
+    final var noOrCores = Runtime.getRuntime()
+      .availableProcessors();
+
+    log.info("noOfCores: {}", noOrCores);
+
+    return Flux.fromIterable(namesList)
+      .flatMapSequential(name ->
+        Mono.just(name)
+          .map(this::upperCase)
+          .subscribeOn(Schedulers.parallel()))
+      .log();
+  }
+
+  public Flux<String> exploreParallelUsingFlatmap1() {
+    final var namesFlux = Flux.fromIterable(namesList)
+      .flatMap(name ->
+        Mono.just(name)
+          .map(this::upperCase)
+          .subscribeOn(Schedulers.parallel()))
+      .log();
+
+    final var namesFlux1 = Flux.fromIterable(namesList)
+      .flatMap(name ->
+        Mono.just(name)
+          .map(this::upperCase)
+          .subscribeOn(Schedulers.parallel()))
       .map(value -> {
         log.info("Value is: " + value);
         return value;

@@ -1,7 +1,7 @@
 package com.learnreactiveprogramming.service;
 
-import ch.qos.logback.classic.spi.EventArgUtil;
 import com.learnreactiveprogramming.domain.Movie;
+import com.learnreactiveprogramming.domain.Revenue;
 import com.learnreactiveprogramming.exception.MovieException;
 import com.learnreactiveprogramming.exception.NetworkException;
 import com.learnreactiveprogramming.exception.ServiceException;
@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import reactor.core.Exceptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Schedulers;
 import reactor.util.retry.Retry;
 import reactor.util.retry.RetryBackoffSpec;
 
@@ -22,6 +23,8 @@ public class MovieReactiveService {
   private final MovieInfoService movieInfoService;
 
   private final ReviewService reviewService;
+
+  private final RevenueService revenueService;
 
   public Flux<Movie> getAllMovies() {
     final var moviesInfoFlux = movieInfoService.retrieveMoviesFlux();
@@ -120,12 +123,11 @@ public class MovieReactiveService {
 
   private RetryBackoffSpec getRetryBackoffSpec() {
     // "backoff is similar to "fixedDelay" (which adds a fixed delay between attempts), but it also adds a jitter between retries.
-    final var retryWhen = Retry.backoff(3, Duration.ofMillis(500))
+    return Retry.backoff(3, Duration.ofMillis(500))
       .filter(exception -> exception instanceof MovieException)
       .onRetryExhaustedThrow((retryBackoffSpec, retrySignal) ->
         // "Propagate" is a Reactor handy function to propagate an exception throughout the pipeline.
         Exceptions.propagate(retrySignal.failure()));
-    return retryWhen;
   }
 
   public Mono<Movie> getMovieByIdUsingZip(long movieId) {
@@ -145,6 +147,25 @@ public class MovieReactiveService {
         reviewService.retrieveReviewsFlux(movieId)
           .collectList()
           .flatMap(reviews -> Mono.just(new Movie(movieInfo, reviews))))
+      .log();
+  }
+
+  public Mono<Movie> getMovieByIdWithRevenue(long movieId) {
+    final var movieInfoMono = movieInfoService.retrieveMovieInfoMonoUsingId(movieId);
+
+    final var revenueMono = Mono.fromCallable(() -> revenueService.getRevenue(movieId))
+      // "getRevenue" has a time operation (delay). To prevent blocking the main thread, it is necessary to subscribe on
+      // a scheduler.
+      .subscribeOn(Schedulers.boundedElastic());
+
+    return movieInfoMono.flatMap(movieInfo ->
+        reviewService.retrieveReviewsFlux(movieId)
+          .collectList()
+          .flatMap(reviews -> Mono.just(new Movie(movieInfo, reviews))))
+      .zipWith(revenueMono, (movie, revenue) -> {
+        movie.setRevenue(revenue);
+        return movie;
+      })
       .log();
   }
 }
