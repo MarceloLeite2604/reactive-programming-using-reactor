@@ -3,6 +3,7 @@ package com.learnreactiveprogramming.service;
 import com.learnreactiveprogramming.domain.Movie;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -12,16 +13,16 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class MovieReactiveServiceTest {
 
-  private MovieInfoService movieInfoService;
-  private ReviewService reviewService;
-  private RevenueService revenueService;
   private MovieReactiveService movieReactiveService;
 
   @BeforeEach
   void setUp() {
-    movieInfoService = new MovieInfoService();
-    reviewService = new ReviewService();
-    revenueService = new RevenueService();
+    final var webClient = WebClient.builder()
+      .build();
+
+    final var movieInfoService = new MovieInfoService(webClient);
+    final var reviewService = new ReviewService(webClient);
+    final var revenueService = new RevenueService();
     movieReactiveService = new MovieReactiveService(movieInfoService, reviewService, revenueService);
   }
 

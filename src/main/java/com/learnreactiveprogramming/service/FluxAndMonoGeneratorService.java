@@ -3,13 +3,17 @@ package com.learnreactiveprogramming.service;
 import com.learnreactiveprogramming.exception.ReactorException;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.FluxSink;
+import reactor.core.publisher.Hooks;
 import reactor.core.publisher.Mono;
+import reactor.tools.agent.ReactorDebugAgent;
 
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.util.List;
-import java.util.function.Function;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.UnaryOperator;
+
+import static com.learnreactiveprogramming.util.CommonUtil.delay;
 
 @Slf4j
 public class FluxAndMonoGeneratorService {
@@ -238,7 +242,7 @@ public class FluxAndMonoGeneratorService {
     return Flux.just("A", "B", "C")
       .map(value -> {
         if ("B".equals(value)) {
-          throw new IllegalStateException("Exception occurred.");
+          throw  new IllegalStateException("Exception occurred.");
         }
 
         return value;
@@ -247,6 +251,63 @@ public class FluxAndMonoGeneratorService {
       .onErrorMap(pipelineException -> {
         log.error("Exception is ", pipelineException);
         ;
+        return new ReactorException(pipelineException, pipelineException.getMessage());
+      })
+      .log();
+  }
+
+  public Flux<String> exploreOnErrorMapDebug(Exception exception) {
+    return Flux.just("A", "B", "C")
+      // Once an exception is received, the subscription is cancelled. This means that no event will be sent right after the exception.
+      .concatWith(Flux.error(exception))
+      .onErrorMap(pipelineException -> {
+        log.error("Exception is ", pipelineException);
+        ;
+        return new ReactorException(pipelineException, pipelineException.getMessage());
+      })
+      .log();
+  }
+
+  public Flux<String> exploreOnErrorMapOnOperatorDebug(Exception exception) {
+
+    // Not the recommended way to debug code on production since it slows down performance of the service.
+    Hooks.onOperatorDebug();
+
+    return Flux.just("A", "B", "C")
+      // Once an exception is received, the subscription is cancelled. This means that no event will be sent right after the exception.
+      .concatWith(Flux.error(exception))
+      .onErrorMap(pipelineException -> {
+        log.error("Exception is ", pipelineException);
+
+        return new ReactorException(pipelineException, pipelineException.getMessage());
+      })
+      .log();
+  }
+
+  public Flux<String> exploreOnErrorMapReactDebugAgent(Exception exception) {
+
+    return Flux.just("A", "B", "C")
+      // Once an exception is received, the subscription is cancelled. This means that no event will be sent right after the exception.
+      .concatWith(Flux.error(exception))
+      .onErrorMap(pipelineException -> {
+        log.error("Exception is ", pipelineException);
+
+        return new ReactorException(pipelineException, pipelineException.getMessage());
+      })
+      .log();
+  }
+
+  public Flux<String> exploreOnErrorMapCheckpoint(Exception exception) {
+
+    return Flux.just("A", "B", "C")
+      // Once an exception is received, the subscription is cancelled. This means that no event will be sent right after the exception.
+      .concatWith(Flux.error(exception))
+      // Although less performance degrading than Hooks.onOperatorDebug(), checkpoint can still be a problem if you
+      // do not know where exactly is you pipeline critical points, or it can make your code dirty with several checkpoints.
+      .checkpoint("errorSpot")
+      .onErrorMap(pipelineException -> {
+        log.error("Exception is ", pipelineException);
+
         return new ReactorException(pipelineException, pipelineException.getMessage());
       })
       .log();
@@ -289,7 +350,7 @@ public class FluxAndMonoGeneratorService {
         }
         return pipelineValue;
       })
-      .onErrorContinue((exception, pipelineValue ) -> {
+      .onErrorContinue((exception, pipelineValue) -> {
         log.error("Exception is " + exception);
         log.info("Value is {}.", pipelineValue);
       })
@@ -373,8 +434,65 @@ public class FluxAndMonoGeneratorService {
       .flatMapMany(this::splitString);
   }
 
+  public Flux<Integer> exploreGenerate() {
+    return Flux.generate(
+      () -> 1,
+      (state, sink) -> {
+        sink.next(state * 2);
+
+        if (state == 10) {
+          sink.complete();
+        }
+        return state + 1;
+      }
+    );
+  }
+
+  public Flux<String> exploreCreate() {
+    return Flux.create(sink -> {
+      // Synchronous (single thread) way.
+      // names().forEach(sink::next);
+      // sink.complete();
+
+      // Asynchronous (using completable future) way.
+      CompletableFuture.supplyAsync(FluxAndMonoGeneratorService::names)
+        .thenAccept(names -> names.forEach(name -> {
+          // Flux.create accepts multiple signal emissions on a single execution while Flux.generate only
+          // accepts one signal at a time.
+          sink.next(name);
+          sink.next(name);
+        }))
+        .thenRun(() -> sendEvents(sink));
+
+    });
+  }
+
+  public void sendEvents(FluxSink<String> sink) {
+    CompletableFuture.supplyAsync(FluxAndMonoGeneratorService::names)
+      .thenAccept(names -> names.forEach(sink::next))
+      .thenRun(sink::complete);
+  }
+
+  public Mono<String> exploreCreateMono() {
+    return Mono.create(sink -> sink.success("alex"));
+  }
+
+  public Flux<String> exploreHandle() {
+    return Flux.fromIterable(List.of("alex", "ben", "chloe"))
+      .handle((name, sink) -> {
+        if (name.length() > 3) {
+          sink.next(name.toUpperCase());
+        }
+      });
+  }
+
   private Mono<List<String>> splitStringMono(String value) {
     return Mono.just(List.of(value.split("")));
+  }
+
+  public static List<String> names() {
+    delay(1000);
+    return List.of("alex", "ben", "chloe");
   }
 
   public static void main(String[] args) {

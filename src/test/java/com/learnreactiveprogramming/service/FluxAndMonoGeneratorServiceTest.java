@@ -4,6 +4,7 @@ import com.learnreactiveprogramming.exception.ReactorException;
 import org.junit.jupiter.api.Test;
 import reactor.test.StepVerifier;
 import reactor.test.scheduler.VirtualTimeScheduler;
+import reactor.tools.agent.ReactorDebugAgent;
 
 import java.time.Duration;
 import java.util.List;
@@ -420,5 +421,101 @@ class FluxAndMonoGeneratorServiceTest {
     StepVerifier.create(flux)
       .expectNext("reactor")
       .verifyComplete();
+  }
+
+  @Test
+  void exploreGenerator() {
+    final var flux = fluxAndMonoGeneratorService.exploreGenerate().log();
+
+    StepVerifier.create(flux)
+      .expectNextCount(10)
+      .verifyComplete();
+  }
+
+  @Test
+  void exploreCreate() {
+    final var flux = fluxAndMonoGeneratorService.exploreCreate().log() ;
+
+    StepVerifier.create(flux)
+      .expectNextCount(9)
+      .verifyComplete();
+  }
+
+  @Test
+  void exploreCreateMono() {
+
+    final var mono = fluxAndMonoGeneratorService.exploreCreateMono();
+
+    StepVerifier.create(mono)
+      .expectNext("alex")
+      .verifyComplete();
+  }
+
+  @Test
+  void exploreHandle() {
+    final var flux = fluxAndMonoGeneratorService.exploreHandle().log();
+
+    StepVerifier.create(flux)
+      .expectNextCount(2)
+      .verifyComplete();
+  }
+
+  @Test
+  void exploreOnErrorMapDebug() {
+
+    final var exception = new RuntimeException("Runtime exception");
+
+    final var flux = fluxAndMonoGeneratorService.exploreOnErrorMapDebug(exception);
+
+    StepVerifier.create(flux)
+      .expectNext("A", "B", "C")
+      .expectError(ReactorException.class)
+      .verify();
+  }
+
+  @Test
+  void exploreOnErrorMapOnOperatorDebug() {
+
+    final var exception = new RuntimeException("Runtime exception");
+
+    final var flux = fluxAndMonoGeneratorService.exploreOnErrorMapOnOperatorDebug(exception);
+
+    StepVerifier.create(flux)
+      .expectNext("A", "B", "C")
+      .expectError(ReactorException.class)
+      .verify();
+  }
+
+  @Test
+  void exploreOnErrorMapCheckpoint() {
+
+    final var exception = new RuntimeException("Runtime exception");
+
+    final var flux = fluxAndMonoGeneratorService.exploreOnErrorMapCheckpoint(exception);
+
+    StepVerifier.create(flux)
+      .expectNext("A", "B", "C")
+      .expectError(ReactorException.class)
+      .verify();
+
+  }
+
+  @Test
+  void exploreOnErrorMapReactDebugAgent() {
+
+    // The recommended way to debug applications by Reactor team.
+    ReactorDebugAgent.init();
+
+    // This is necessary since we will execute it from test cases.
+    ReactorDebugAgent.processExistingClasses();
+
+    final var exception = new RuntimeException("Runtime exception");
+
+    final var flux = fluxAndMonoGeneratorService.exploreOnErrorMapReactDebugAgent(exception);
+
+    StepVerifier.create(flux)
+      .expectNext("A", "B", "C")
+      .expectError(ReactorException.class)
+      .verify();
   }
 }

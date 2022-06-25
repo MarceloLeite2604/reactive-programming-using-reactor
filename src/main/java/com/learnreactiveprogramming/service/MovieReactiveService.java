@@ -1,7 +1,6 @@
 package com.learnreactiveprogramming.service;
 
 import com.learnreactiveprogramming.domain.Movie;
-import com.learnreactiveprogramming.domain.Revenue;
 import com.learnreactiveprogramming.exception.MovieException;
 import com.learnreactiveprogramming.exception.NetworkException;
 import com.learnreactiveprogramming.exception.ServiceException;
@@ -31,6 +30,22 @@ public class MovieReactiveService {
 
     return moviesInfoFlux.flatMap(movieInfo -> {
         final var reviewsMono = reviewService.retrieveReviewsFlux(movieInfo.getMovieInfoId())
+          .collectList();
+
+        return reviewsMono.map(reviews -> new Movie(movieInfo, reviews));
+      })
+      .onErrorMap(exception -> {
+        log.error("Exception is: ", exception);
+        throw new MovieException(exception.getMessage());
+      })
+      .log();
+  }
+
+  public Flux<Movie> getAllMoviesRestClient() {
+    final var moviesInfoFlux = movieInfoService.retrieveAllMovieInfoRestClient();
+
+    return moviesInfoFlux.flatMap(movieInfo -> {
+        final var reviewsMono = reviewService.retrieveReviewsFluxRestClient(movieInfo.getMovieInfoId())
           .collectList();
 
         return reviewsMono.map(reviews -> new Movie(movieInfo, reviews));
@@ -145,6 +160,16 @@ public class MovieReactiveService {
 
     return movieInfoMono.flatMap(movieInfo ->
         reviewService.retrieveReviewsFlux(movieId)
+          .collectList()
+          .flatMap(reviews -> Mono.just(new Movie(movieInfo, reviews))))
+      .log();
+  }
+
+  public Mono<Movie> getMovieByIdRestClient(long movieId) {
+    final var movieInfoMono = movieInfoService.retrieveMovieInfoByIdRestClient(movieId);
+
+    return movieInfoMono.flatMap(movieInfo ->
+        reviewService.retrieveReviewsFluxRestClient(movieId)
           .collectList()
           .flatMap(reviews -> Mono.just(new Movie(movieInfo, reviews))))
       .log();
